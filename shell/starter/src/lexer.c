@@ -6,10 +6,25 @@
 int main()
 {
 	while (1) {
-		printf("> ");
+	
+		// environment variables
+		char *user_env = getenv("USER");
+		char *home_env = getenv("HOME");
+		char *machine_env = getenv("MACHINE");
+
+		printf("%s@%s:%s> ", user_env, machine_env, home_env);
 
 		/* input contains the whole command
 		 * tokens contains substrings from input split by spaces
+		 */
+
+		 /*
+		 char *path_env = getenv("PATH");
+    if (path_env != NULL) {
+        printf("PATH: %s\n", path_env);
+    } else {
+        printf("PATH environment variable not found.\n");
+    }
 		 */
 
 		char *input = get_input();
