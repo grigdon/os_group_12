@@ -95,6 +95,7 @@ void free_tokens(tokenlist *tokens) {
 
 void expand_env_tokens(tokenlist *tokens) {
 	for(int i = 0; i < tokens->size; i++) {
+		// checks for env vars in the form '$USER' and subs for true value
 		if(tokens->items[i][0] == '$' && strlen(tokens->items[i]) > 1) {
 			char *env_var = getenv(tokens->items[i] + 1);
 			if(env_var != NULL) {
@@ -103,6 +104,25 @@ void expand_env_tokens(tokenlist *tokens) {
 			} else { 
 				tokens->items[i] = realloc(tokens->items[i], 1);
 				tokens->items[i][1] = '\0';
+			}
+		}
+		// checks for tilde expansion 
+		if(tokens->items[i][0] == '~' && (tokens->items[i][1] == '\0' || tokens->items[i][1] == '/')) {
+			char *home_dir = getenv("HOME");
+			if(tokens->items[i][1] == '\0' && home_dir != NULL) {
+				tokens->items[i] = realloc(tokens->items[i], strlen(home_dir) + 1);
+				strcpy(tokens->items[i], home_dir);
+			} else if(tokens->items[i][1] == '/') {
+				// store everything after ~/ ... ~/projects/doc_1 => store("projects/doc_1") concatenate this on top of "~" expanded home directory
+				char *remaining_dir = tokens->items[i] + 1;
+				tokens->items[i] = realloc(tokens->items[i], strlen(home_dir) + strlen(remaining_dir) + 1);
+				char *final_dir = strcat(home_dir, remaining_dir);
+				strcpy(tokens->items[i], final_dir);
+			} else {
+				// if that home_dir is == NULL
+
+				tokens->items[i] = realloc(tokens->items[i], 1);
+				tokens->items[i] = '\0';
 			}
 		}
 	}
