@@ -14,19 +14,6 @@ int main()
 
 		printf("%s@%s:%s> ", user_env, machine_env, home_env);
 
-		/* input contains the whole command
-		 * tokens contains substrings from input split by spaces
-		 */
-
-		 /*
-		 char *path_env = getenv("PATH");
-    if (path_env != NULL) {
-        printf("PATH: %s\n", path_env);
-    } else {
-        printf("PATH environment variable not found.\n");
-    }
-		 */
-
 		char *input = get_input();
 		printf("whole input: %s\n", input);
 
@@ -94,6 +81,7 @@ tokenlist *get_tokens(char *input) {
 		add_token(tokens, tok);
 		tok = strtok(NULL, " ");
 	}
+	expand_env_tokens(tokens);
 	free(buf);
 	return tokens;
 }
@@ -103,4 +91,19 @@ void free_tokens(tokenlist *tokens) {
 		free(tokens->items[i]);
 	free(tokens->items);
 	free(tokens);
+}
+
+void expand_env_tokens(tokenlist *tokens) {
+	for(int i = 0; i < tokens->size; i++) {
+		if(tokens->items[i][0] == '$' && strlen(tokens->items[i]) > 1) {
+			char *env_var = getenv(tokens->items[i] + 1);
+			if(env_var != NULL) {
+				tokens->items[i] = realloc(tokens->items[i], strlen(env_var) + 1);
+				strcpy(tokens->items[i], env_var);
+			} else { 
+				tokens->items[i] = realloc(tokens->items[i], 1);
+				tokens->items[i][1] = '\0';
+			}
+		}
+	}
 }
