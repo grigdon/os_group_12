@@ -1,6 +1,4 @@
-obj/
 *.o
-bin/
 shell
 *~
 *.swp
