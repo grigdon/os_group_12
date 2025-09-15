@@ -1,0 +1,10 @@
+obj/
+*.o
+bin/
+shell
+*~
+*.swp
+*.swo
+core
+*.d
+.vscode/
