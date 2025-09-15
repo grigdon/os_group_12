@@ -16,7 +16,7 @@ char *search_path(char* command) {
     // case 2: search required, i.e., in_token="ls"
     } else {
         char* path_copy = str_dup(getenv("PATH")); // store $PATH
-        char* directory = strtok(path_copy, ':'); // get first directory from PATH 
+        char* directory = strtok(path_copy, ":"); // get first directory from PATH 
         char full_path[1024];
 
         while(directory != NULL) {
@@ -27,7 +27,7 @@ char *search_path(char* command) {
                 return str_dup(full_path); 
             } 
             // go to next token        
-            directory = strtok(NULL, ':');
+            directory = strtok(NULL, ":");
         }
         free(path_copy);
         return NULL; // if not matches after loop, return NULL
