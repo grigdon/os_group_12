@@ -2,4 +2,4 @@
 
 #include <stdlib.h>
 
-char *search_path(char* token);
+char *str_dup(const char *s);
