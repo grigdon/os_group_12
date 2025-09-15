@@ -77,7 +77,7 @@ void expand_env_tokens(tokenlist *tokens) {
 				strcpy(tokens->items[i], env_var);
 			} else { 
 				tokens->items[i] = realloc(tokens->items[i], 1);
-				tokens->items[i][1] = '\0';
+				tokens->items[i][0] = '\0';
 			}
 		}
 		// checks for tilde expansion 
