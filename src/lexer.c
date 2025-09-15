@@ -3,32 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-int main()
-{
-	while (1) {
-	
-		// environment variables
-		char *user_env = getenv("USER");
-		char *home_env = getenv("HOME");
-		char *machine_env = getenv("MACHINE");
-
-		printf("%s@%s:%s> ", user_env, machine_env, home_env);
-
-		char *input = get_input();
-		printf("whole input: %s\n", input);
-
-		tokenlist *tokens = get_tokens(input);
-		for (int i = 0; i < tokens->size; i++) {
-			printf("token %d: (%s)\n", i, tokens->items[i]);
-		}
-
-		free(input);
-		free_tokens(tokens);
-	}
-
-	return 0;
-}
-
 char *get_input(void) {
 	char *buffer = NULL;
 	int bufsize = 0;

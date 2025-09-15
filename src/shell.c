@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h> // pid_t type
 
 char *search_path(char* command) {
     // case 1: explicit executable, i.e, in_token="/usr/bin/ls"
@@ -33,3 +34,22 @@ char *search_path(char* command) {
         return NULL; // if not matches after loop, return NULL
     }
 } 
+
+size_t execute_command(char* command, char* args[]) {
+    pid_t pid = fork();
+
+    if(pid < 0) {
+        perror("fork failed"); 
+    } else if(pid == 0) {
+
+        // child process
+
+        execv(command, args);
+
+    } else {
+
+        // parent process
+    }
+
+    return 0;
+}
