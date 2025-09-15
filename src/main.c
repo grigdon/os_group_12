@@ -18,7 +18,7 @@ int main() {
 
         // execute (shell)
         if (tokens->size > 0) {
-            // execute_command(tokens, args);
+            execute_command(tokens);
         }
 
         // cleanup (lexer)

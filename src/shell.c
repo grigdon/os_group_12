@@ -1,10 +1,12 @@
 #include "shell.h"
 #include "helper.h"
+#include "lexer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h> // pid_t type
+#include <sys/wait.h> // wait()
 
 char *search_path(char* command) {
     // case 1: explicit executable, i.e, in_token="/usr/bin/ls"
@@ -35,21 +37,32 @@ char *search_path(char* command) {
     }
 } 
 
-size_t execute_command(char* command, char* args[]) {
-    pid_t pid = fork();
+extern char **environ; // passes environment over
 
-    if(pid < 0) {
-        perror("fork failed"); 
-    } else if(pid == 0) {
+void execute_command(tokenlist *tokens) {
+    int status;
+    char *full_path = search_path(tokens->items[0]);
 
-        // child process
-
-        execv(command, args);
-
+    if(full_path == NULL) {
+        perror("command does not exist");
+        return; 
     } else {
+        pid_t child_pid = fork();
+        if(child_pid < 0) { // error state
+            perror("fork failed"); 
+            return;
+        } else if(child_pid == 0) { // child process
+            execv(full_path, tokens->items);
+            perror("error with executing command");
+            exit(EXIT_FAILURE);
+            }
+        else { 
+            waitpid(child_pid, &status, 0); // parent state
+            if(!(WIFEXITED(status))) {
+                perror("Child terminated with abnormal status WIFEXITED(STATUS)");
 
-        // parent process
+            }
+        }
+        return; 
     }
-
-    return 0;
 }
