@@ -3,9 +3,9 @@
 [Description]
 
 ## Group Members
-- **John Doe**: jd19@fsu.edu
-- **Jane Smith**: js19@fsu.edu
-- **Alex Brown**: ab19@fsu.edu
+- **Gabe Rigdon**: gcr22@fsu.edu
+- **Bruno Page**: bap21i@fsu.edu
+- **Luke Stanton**: les22@fsu.edu
 ## Division of Labor
 
 ### Part 1: Prompt
@@ -87,13 +87,14 @@ This will run the program ...
 ## Development Log
 Each member records their contributions here.
 
-### [Member 1]
+### Gabe Rigdon
 
 | Date       | Work Completed / Notes |
 |------------|------------------------|
-| YYYY-MM-DD | [Description of task]  |
-| YYYY-MM-DD | [Description of task]  |
-| YYYY-MM-DD | [Description of task]  |
+| 2025-09-14 | Completed part 4       |
+| 2025-09-12 | Completed part 3       |
+| 2025-09-12 | Completed part 2       |
+| 2025-09-11 | Completed part 1       |
 
 ### [Member 2]
 
