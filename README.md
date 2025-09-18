@@ -10,23 +10,23 @@
 
 ### Part 1: Prompt
 - **Responsibilities**: [Description]
-- **Assigned to**: John Doe
+- **Assigned to**:
 
 ### Part 2: Environment Variables
 - **Responsibilities**: [Description]
-- **Assigned to**: Jane Smith
+- **Assigned to**:
 
 ### Part 3: Tilde Expansion
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown
+- **Assigned to**:
 
 ### Part 4: $PATH Search
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, Jane Smith
+- **Assigned to**: 
 
 ### Part 5: External Command Execution
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, Jane Smith
+- **Assigned to**: 
 
 ### Part 6: I/O Redirection
 - **Responsibilities**: [Description]
@@ -34,37 +34,49 @@
 
 ### Part 7: Piping
 - **Responsibilities**: [Description]
-- **Assigned to**: John Doe
+- **Assigned to**:
 
 ### Part 8: Background Processing
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, John Doe
+- **Assigned to**:
 
 ### Part 9: Internal Command Execution
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown
+- **Assigned to**:
 
 ### Part 10: External Timeout Executable
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown, Jane Smith
+- **Assigned to**:
 
 ### Extra Credit
 - **Responsibilities**: [Description]
-- **Assigned to**: Alex Brown
+- **Assigned to**:
 
 ## File Listing
 ```
-shell/
+os_group_12/
 │
 ├── src/
-│ ├── main.c
-│ └── shell.c
+│   ├── helper.c
+│   ├── lexer.c
+│   ├── main.c
+│   ├── shell.c
+│   └── io_redirection.c
 │
 ├── include/
-│ └── shell.h
+│   ├── helper.h
+│   ├── lexer.h
+│   ├── shell.h
+│   └── io_redirection.h
+│
+├── obj/
+│
+├── bin/
 │
 ├── README.md
-└── Makefile
+├── Makefile
+└── .gitignore
+
 ```
 ## How to Compile & Execute
 
@@ -102,6 +114,7 @@ Each member records their contributions here.
 | Date       | Work Completed / Notes |
 |------------|------------------------|
 | 2025-09-18 | Completed Part 6       |
+| 2025-09-18 | Extended Part 5        |
 
 
 ### [Member 3]
