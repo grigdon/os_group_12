@@ -30,7 +30,7 @@
 
 ### Part 6: I/O Redirection
 - **Responsibilities**: [Description]
-- **Assigned to**: Jane Smith
+- **Assigned to**: Luke Stanton
 
 ### Part 7: Piping
 - **Responsibilities**: [Description]
@@ -97,13 +97,11 @@ Each member records their contributions here.
 | 2025-09-12 | Completed part 2       |
 | 2025-09-11 | Completed part 1       |
 
-### [Member 2]
+### Luke Stanton
 
 | Date       | Work Completed / Notes |
 |------------|------------------------|
-| YYYY-MM-DD | [Description of task]  |
-| YYYY-MM-DD | [Description of task]  |
-| YYYY-MM-DD | [Description of task]  |
+| 2025-09-18 | Completed Part 6       |
 
 
 ### [Member 3]
