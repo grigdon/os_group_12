@@ -1,3 +1,4 @@
+#include "io_redirection.h"
 #include "shell.h"
 #include "helper.h"
 #include "lexer.h"
@@ -39,30 +40,90 @@ char *search_path(char* command) {
 
 extern char **environ; // passes environment over
 
-void execute_command(tokenlist *tokens) {
-    int status;
-    char *full_path = search_path(tokens->items[0]);
+// Creates new token list that's argv only
+static tokenlist * take_redirections(const tokenlist * tokens, io_redirection_t * out_r) {
+    tokenlist * argv_only = new_tokenlist();
+    out_r->in_path = NULL;
+    out_r->out_path = NULL;
 
-    if(full_path == NULL) {
-        perror("command does not exist");
-        return; 
-    } else {
-        pid_t child_pid = fork();
-        if(child_pid < 0) { // error state
-            perror("fork failed"); 
-            return;
-        } else if(child_pid == 0) { // child process
-            execv(full_path, tokens->items);
-            perror("error with executing command");
-            exit(EXIT_FAILURE);
-            }
-        else { 
-            waitpid(child_pid, &status, 0); // parent state
-            if(!(WIFEXITED(status))) {
-                perror("Child terminated with abnormal status WIFEXITED(STATUS)");
+    for (size_t i = 0; i < tokens->size; i++) {
+        char * t = tokens->items[i];
 
+        // <
+        if (strcmp(t, "<") == 0) {
+            if (i + 1 >= tokens->size) {
+                fprintf(stderr, "Error: No input file after '<'\n");
+                free_tokens(argv_only);
+                return NULL;
             }
+            out_r->in_path = tokens->items[i + 1];
+            i++;
+            continue;
         }
-        return; 
+
+        // >
+        if (strcmp(t, ">") == 0) {
+            if (i + 1 >= tokens->size) {
+                fprintf(stderr, "Error: No output file after '>'\n");
+                free_tokens(argv_only);
+                return NULL;
+            }
+            out_r->out_path = tokens->items[i + 1];
+            i++;
+            continue;
+        }
+
+        // Normal argument
+        add_token(argv_only, t);
     }
+
+    return argv_only;
+}
+
+
+// Updated to use the new argv_only list
+void execute_command(tokenlist *tokens) {
+    io_redirection_t redir;
+    tokenlist * argv_only = take_redirections(tokens, &redir);
+
+    if (!argv_only) {
+        return;
+    }
+
+    if (argv_only->size == 0) {
+        free_tokens(argv_only);
+        return;
+    }
+
+    char *full_path = search_path(argv_only->items[0]);
+    if (full_path == NULL) {
+        perror("command does not exist");
+        free_tokens(argv_only);
+        return;
+    }
+
+    int status;
+    pid_t child_pid = fork();
+    if (child_pid < 0) {
+        perror("fork failed");
+        free(full_path);
+        free_tokens(argv_only);
+        return;
+    } else if (child_pid == 0) {
+        if (apply_io_redirection(&redir) < 0) {
+            _exit(1);
+        }
+
+        execv(full_path, argv_only->items);
+        perror("error with executing command");
+        _exit(127);
+    } else {
+        waitpid(child_pid, &status, 0);
+        if (!(WIFEXITED(status))) {
+            perror("Child terminated with abnormal status WIFEXITED(STATUS)");
+        }
+    }
+
+    free(full_path);
+    free_tokens(argv_only);
 }
