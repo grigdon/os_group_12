@@ -6,3 +6,9 @@ bin/
 core
 *.d
 .vscode/
+bin/
+*.o
+*.out
+
+# test files
+*.txt
