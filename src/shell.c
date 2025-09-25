@@ -2,12 +2,14 @@
 #include "shell.h"
 #include "helper.h"
 #include "lexer.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h> // pid_t type
 #include <sys/wait.h> // wait()
+#include <errno.h>
 
 char *search_path(char* command) {
     // case 1: explicit executable, i.e, in_token="/usr/bin/ls"
@@ -19,7 +21,11 @@ char *search_path(char* command) {
         }
     // case 2: search required, i.e., in_token="ls"
     } else {
-        char* path_copy = str_dup(getenv("PATH")); // store $PATH
+        char * path_env = getenv("PATH");
+        // Added missing PATH handling
+        if (!path_env || !*path_env) return NULL;
+        char * path_copy = str_dup(path_env);
+
         char* directory = strtok(path_copy, ":"); // get first directory from PATH 
         char full_path[1024];
 
@@ -28,8 +34,8 @@ char *search_path(char* command) {
 
             if(access(full_path, X_OK) == 0) {
                 free(path_copy);
-                return str_dup(full_path); 
-            } 
+                return str_dup(full_path);
+            }
             // go to next token        
             directory = strtok(NULL, ":");
         }
@@ -80,9 +86,179 @@ static tokenlist * take_redirections(const tokenlist * tokens, io_redirection_t 
     return argv_only;
 }
 
+static int count_pipes(const tokenlist * tokens) {
+    int count = 0;
+    for (size_t i = 0; i < tokens->size; i++) {
+        if (strcmp(tokens->items[i], "|") == 0) {
+            count++;
+        }
+    }
+    return count;
+}
+
+// Builds tokenlists for each command split by pipes
+static int split_by_pipes(const tokenlist * tokens, tokenlist * parts[3]) {
+    int part_index = 0;
+    parts[part_index] = new_tokenlist();
+
+    for (size_t i = 0; i < tokens->size; i++) {
+        if (strcmp(tokens->items[i], "|") == 0) {
+            if (parts[part_index]->size == 0) {
+                fprintf(stderr, "Error: No command between pipes\n");
+                for (int j = 0; j <= part_index; j++) {
+                    free_tokens(parts[j]);
+                }
+                return -1;
+            }
+
+            part_index++;
+
+            if (part_index >= 3) {
+                fprintf(stderr, "Error: Too many pipes\n");
+                for (int j = 0; j < part_index; j++) {
+                    free_tokens(parts[j]);
+                }
+                return -1;
+            }
+
+            parts[part_index] = new_tokenlist();
+            continue;
+        }
+
+        add_token(parts[part_index], tokens->items[i]);
+    }
+
+    if (parts[part_index]->size == 0) {
+        fprintf(stderr, "Error: No command after the last pipe\n");
+        for (int j = 0; j <= part_index; j++) {
+            free_tokens(parts[j]);
+        }
+        return -1;
+    }
+
+    return part_index + 1;
+}
+
+static void execute_pipeline(tokenlist * parts[], int parts_count) {
+    char * paths[3] = {NULL, NULL, NULL};
+    for (int i = 0; i < parts_count; ++i) {
+        paths[i] = search_path(parts[i]->items[0]);
+        if (!paths[i]) {
+            fprintf(stderr, "command does not exist: %s\n", parts[i]->items[0]);
+            for (int k = 0; k < i; ++k) free(paths[k]);
+            return;
+        }
+    }
+
+    pid_t pids[3] = {-1, -1, -1 };
+    int prev_pipefd = -1;
+    int pipefd[2] = { -1, -1};
+
+    for (int i = 0; i < parts_count; i++) {
+        if (i < parts_count - 1 && (pipe(pipefd) < 0)) {
+            perror("pipe");
+            if (prev_pipefd != -1) close(prev_pipefd);
+            for (int j = 0; j < i; j++) {
+                if (pids[j] > 0) waitpid(pids[j], NULL, 0);
+            }
+            for (int j = 0; j < parts_count; j++) {
+                free(paths[j]);
+            }
+            return;
+        }
+
+        pid_t pid = fork();
+        if (pid < 0) {
+            perror("fork");
+            if (prev_pipefd != -1) close(prev_pipefd);
+            if (i < parts_count - 1) {
+                close(pipefd[0]);
+                close(pipefd[1]);
+            }
+            for (int k = 0; k < i; ++k) {
+                if (pids[k] > 0) waitpid(pids[k], NULL, 0);
+            }
+            for (int k = 0; k < parts_count; ++k) free(paths[k]);
+            return;
+        }
+
+        if (pid == 0) {
+            // Child
+            if (prev_pipefd != -1) {
+                if (dup2(prev_pipefd, STDIN_FILENO) < 0) {
+                    perror("dup2 stdin");
+                    _exit(1);
+                }
+            }
+
+            if (i < parts_count - 1) {
+                if (dup2(pipefd[1], STDOUT_FILENO) < 0) {
+                    perror("dup2 stdout");
+                    _exit(1);
+                }
+            }
+
+            if (prev_pipefd != -1) close(prev_pipefd);
+            if (i < parts_count - 1) {
+                close(pipefd[0]);
+                close(pipefd[1]);
+            }
+
+            execv(paths[i], parts[i]->items);
+
+            perror("execv");
+            _exit(127);
+        } else {
+            // Parent
+            pids[i] = pid;
+
+            if (prev_pipefd != -1) {
+                close(prev_pipefd);
+                prev_pipefd = -1;
+            }
+
+            if (i < parts_count - 1) {
+                close(pipefd[1]);
+                prev_pipefd = pipefd[0];
+            }
+        }
+    }
+
+    if (prev_pipefd != -1) close(prev_pipefd);
+
+    for (int i = 0; i < parts_count; ++i) {
+        int status;
+        waitpid(pids[i], &status, 0);
+        if (!WIFEXITED(status)) {
+            perror("pipeline child terminated abnormally");
+        }
+    }
+
+    for (int i = 0; i < parts_count; ++i) free(paths[i]);
+}
 
 // Updated to use the new argv_only list
 void execute_command(tokenlist *tokens) {
+    // Pipeline branch
+    int pipes_count = count_pipes(tokens);
+    if (pipes_count > 0) {
+        if (pipes_count > 2) {
+            fprintf(stderr, "error: at most two pipes supported\n");
+            return;
+        }
+        tokenlist * parts[3] = { NULL, NULL, NULL };
+        int parts_count = split_by_pipes(tokens, parts);
+        if (parts_count < 0) {
+            return;
+        }
+
+        execute_pipeline(parts, parts_count);
+
+        for (int i = 0; i < parts_count; ++i) free_tokens(parts[i]);
+        return;
+    }
+
+    // If no pipes will hit this part
     io_redirection_t redir;
     tokenlist * argv_only = take_redirections(tokens, &redir);
 
