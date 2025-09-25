@@ -3,9 +3,12 @@
 #include <string.h>
 #include "lexer.h"
 #include "shell.h"
+#include "jobs.h"
 
 int main() {
     while (1) {
+        check_jobs();
+
         // print prompt
         char *user_env = getenv("USER");
         char *home_env = getenv("HOME");
@@ -14,6 +17,10 @@ int main() {
 
         // parse input (lexer)
         char *input = get_input();
+        if (input == NULL) {
+            printf("\n");
+            break;
+        }
         tokenlist *tokens = get_tokens(input);
 
         // execute (shell)
