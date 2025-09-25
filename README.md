@@ -34,11 +34,11 @@
 
 ### Part 7: Piping
 - **Responsibilities**: [Description]
-- **Assigned to**:
+- **Assigned to**: Luke Stanton
 
 ### Part 8: Background Processing
 - **Responsibilities**: [Description]
-- **Assigned to**:
+- **Assigned to**: Luke Stanton
 
 ### Part 9: Internal Command Execution
 - **Responsibilities**: [Description]
@@ -115,6 +115,7 @@ Each member records their contributions here.
 |------------|------------------------|
 | 2025-09-18 | Completed Part 6       |
 | 2025-09-18 | Extended Part 5        |
+| 2025-09-24 | Completed Part 7       |
 
 
 ### [Member 3]
