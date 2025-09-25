@@ -116,6 +116,7 @@ Each member records their contributions here.
 | 2025-09-18 | Completed Part 6       |
 | 2025-09-18 | Extended Part 5        |
 | 2025-09-24 | Completed Part 7       |
+| 2025-09-24 | Completed Part 8       |
 
 
 ### [Member 3]
