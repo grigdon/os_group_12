@@ -2,6 +2,7 @@
 #include "shell.h"
 #include "helper.h"
 #include "lexer.h"
+#include "jobs.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -139,13 +140,15 @@ static int split_by_pipes(const tokenlist * tokens, tokenlist * parts[3]) {
     return part_index + 1;
 }
 
+/*
+Replaced by execute_pipeline_bg.
 static void execute_pipeline(tokenlist * parts[], int parts_count) {
     char * paths[3] = {NULL, NULL, NULL};
-    for (int i = 0; i < parts_count; ++i) {
+    for (int i = 0; i < parts_count; i++) {
         paths[i] = search_path(parts[i]->items[0]);
         if (!paths[i]) {
             fprintf(stderr, "command does not exist: %s\n", parts[i]->items[0]);
-            for (int k = 0; k < i; ++k) free(paths[k]);
+            for (int k = 0; k < i; k++) free(paths[k]);
             return;
         }
     }
@@ -175,10 +178,10 @@ static void execute_pipeline(tokenlist * parts[], int parts_count) {
                 close(pipefd[0]);
                 close(pipefd[1]);
             }
-            for (int k = 0; k < i; ++k) {
+            for (int k = 0; k < i; k++) {
                 if (pids[k] > 0) waitpid(pids[k], NULL, 0);
             }
-            for (int k = 0; k < parts_count; ++k) free(paths[k]);
+            for (int k = 0; k < parts_count; k++) free(paths[k]);
             return;
         }
 
@@ -226,7 +229,7 @@ static void execute_pipeline(tokenlist * parts[], int parts_count) {
 
     if (prev_pipefd != -1) close(prev_pipefd);
 
-    for (int i = 0; i < parts_count; ++i) {
+    for (int i = 0; i < parts_count; i++) {
         int status;
         waitpid(pids[i], &status, 0);
         if (!WIFEXITED(status)) {
@@ -236,70 +239,230 @@ static void execute_pipeline(tokenlist * parts[], int parts_count) {
 
     for (int i = 0; i < parts_count; ++i) free(paths[i]);
 }
+*/
 
-// Updated to use the new argv_only list
-void execute_command(tokenlist *tokens) {
+// Run pipeline in background. Do not wait if bg is 1. Wait if bg is 0.
+static void execute_pipeline_bg(tokenlist * parts[], int parts_count, int background, pid_t * out_last_pid) {
+    char * paths[3] = { NULL,NULL,NULL };
+    for (int i = 0; i < parts_count; i++) {
+        paths[i] = search_path(parts[i]->items[0]);
+        if (!paths[i]) {
+            fprintf(stderr, "Command not found: %s\n", parts[i]->items[0]);
+            for (int k = 0; k < i; k++) {
+                free(paths[k]);
+            }
+            return;
+        }
+    }
+
+    pid_t pids[3] = {-1,-1,-1};
+    int prev_pipefd = -1;
+    int pipefd[2] = {-1,-1};
+
+    for (int i = 0; i < parts_count; i++) {
+        if (i < parts_count - 1 && pipe(pipefd) < 0) {
+            perror("pipe");
+            if (prev_pipefd != -1) {
+                close(prev_pipefd);
+            }
+
+            for (int j = 0; j < i; j++) {
+                if (pids[j] > 0) {
+                    waitpid(pids[j], NULL, 0);
+                }
+            }
+
+            for (int j = 0; j < parts_count; j++) {
+                free(paths[j]);
+            }
+            return;
+        }
+
+        pid_t pid = fork();
+        if (pid < 0) {
+            perror("fork");
+            if (prev_pipefd != -1) {
+                close(prev_pipefd);
+            }
+
+            if (i < parts_count - 1) {
+                close(pipefd[0]);
+                close(pipefd[1]);
+            }
+
+            for (int j = 0; j < i; j++) {
+                if (pids[j] > 0) {
+                    waitpid(pids[j], NULL, 0);
+                }
+            }
+
+            for (int j = 0; j < parts_count; j++) {
+                free(paths[j]);
+            }
+            return;
+        }
+
+        if (pid == 0) {
+            if (prev_pipefd != -1) {
+                if (dup2(prev_pipefd, STDIN_FILENO) < 0) {
+                    perror("dup2 stdin"); _exit(1);
+                }
+            }
+            if (i < parts_count - 1) {
+                if (dup2(pipefd[1], STDOUT_FILENO) < 0) {
+                    perror("dup2 stdout"); _exit(1);
+                }
+            }
+
+            if (prev_pipefd != -1) close(prev_pipefd);
+            if (i < parts_count - 1) { close(pipefd[0]); close(pipefd[1]); }
+
+            execv(paths[i], parts[i]->items);
+            perror("execv");
+            _exit(127);
+        } else {
+            pids[i] = pid;
+
+            if (prev_pipefd != -1) {
+                close(prev_pipefd); prev_pipefd = -1;
+            }
+            if (i < parts_count - 1) {
+                close(pipefd[1]);
+                prev_pipefd = pipefd[0];
+            }
+        }
+    }
+
+    if (prev_pipefd != -1) {
+        close(prev_pipefd);
+    }
+
+    if (out_last_pid) * out_last_pid = pids[parts_count - 1];
+
+    if (!background) {
+        for (int i = 0; i < parts_count; i++) {
+            int status;
+            waitpid(pids[i], &status, 0);
+            if (!WIFEXITED(status)) {
+                perror("Pipeline child stopped");
+            }
+        }
+    }
+
+    for (int i = 0; i < parts_count; i++) {
+        free(paths[i]);
+    }
+}
+
+
+static int remove_last_ampersand(tokenlist *tokens) {
+    if (tokens->size == 0) return 0;
+
+    if (strcmp(tokens->items[tokens->size - 1], "&") == 0) {
+        free(tokens->items[tokens->size - 1]);
+        tokens->items[tokens->size - 1] = NULL;
+        tokens->size -= 1;
+        return 1;
+    }
+    return 0;
+}
+
+static char * join_tokens(const tokenlist * tokens) {
+    size_t total = 0;
+    for (size_t i = 0; i < tokens->size; ++i) {
+        total += strlen(tokens->items[i]) + 1;
+    }
+    
+    if (total == 0) return NULL;
+    char * buffer = malloc(total + 1);
+    if (!buffer) return NULL;
+    buffer[0] = '\0';
+    for (size_t i = 0; i < tokens->size; i++) {
+        strcat(buffer, tokens->items[i]);
+        if (i + 1 < tokens->size) strcat(buffer, " ");
+    }
+    return buffer;
+}
+
+
+// Updated to use the new argv_only list and detect bg
+void execute_command(tokenlist * tokens) {
+    int is_bg = remove_last_ampersand(tokens);
+    char * cmdline_print = join_tokens(tokens);
+
     // Pipeline branch
     int pipes_count = count_pipes(tokens);
     if (pipes_count > 0) {
         if (pipes_count > 2) {
             fprintf(stderr, "error: at most two pipes supported\n");
+            free(cmdline_print);
             return;
         }
         tokenlist * parts[3] = { NULL, NULL, NULL };
         int parts_count = split_by_pipes(tokens, parts);
         if (parts_count < 0) {
+            free(cmdline_print);
             return;
         }
 
-        execute_pipeline(parts, parts_count);
+        pid_t last_pid = -1;
+        execute_pipeline_bg(parts, parts_count, is_bg, &last_pid);
+
+        if (is_bg && last_pid > 0) {
+            add_job(last_pid, cmdline_print);
+        }
 
         for (int i = 0; i < parts_count; ++i) free_tokens(parts[i]);
+        free(cmdline_print);
         return;
     }
 
-    // If no pipes will hit this part
+    // No pipes
     io_redirection_t redir;
     tokenlist * argv_only = take_redirections(tokens, &redir);
-
     if (!argv_only) {
+        free(cmdline_print);
         return;
     }
-
     if (argv_only->size == 0) {
         free_tokens(argv_only);
+        free(cmdline_print);
         return;
     }
 
-    char *full_path = search_path(argv_only->items[0]);
+    char * full_path = search_path(argv_only->items[0]);
     if (full_path == NULL) {
-        perror("command does not exist");
+        fprintf(stderr, "command not found: %s\n", argv_only->items[0]);
         free_tokens(argv_only);
+        free(cmdline_print);
         return;
     }
 
-    int status;
     pid_t child_pid = fork();
     if (child_pid < 0) {
         perror("fork failed");
         free(full_path);
         free_tokens(argv_only);
+        free(cmdline_print);
         return;
     } else if (child_pid == 0) {
-        if (apply_io_redirection(&redir) < 0) {
-            _exit(1);
-        }
-
+        if (apply_io_redirection(&redir) < 0) _exit(1);
         execv(full_path, argv_only->items);
         perror("error with executing command");
         _exit(127);
     } else {
-        waitpid(child_pid, &status, 0);
-        if (!(WIFEXITED(status))) {
-            perror("Child terminated with abnormal status WIFEXITED(STATUS)");
+        if (is_bg) {
+            add_job(child_pid, cmdline_print);
+        } else {
+            int status;
+            waitpid(child_pid, &status, 0);
+            if (!WIFEXITED(status)) {
+                perror("Child terminated with abnormal status WIFEXITED(STATUS)");
+            }
         }
     }
 
     free(full_path);
     free_tokens(argv_only);
+    free(cmdline_print);
 }

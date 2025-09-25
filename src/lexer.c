@@ -7,8 +7,10 @@ char *get_input(void) {
 	char *buffer = NULL;
 	int bufsize = 0;
 	char line[5];
+	int read_any = 0;
 	while (fgets(line, 5, stdin) != NULL)
 	{
+		read_any = 1;
 		int addby = 0;
 		char *newln = strchr(line, '\n');
 		if (newln != NULL)
@@ -20,6 +22,9 @@ char *get_input(void) {
 		bufsize += addby;
 		if (newln != NULL)
 			break;
+	}
+	if (!read_any) {
+		return NULL;
 	}
 	buffer = (char *)realloc(buffer, bufsize + 1);
 	buffer[bufsize] = 0;
