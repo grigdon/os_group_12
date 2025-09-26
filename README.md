@@ -1,6 +1,24 @@
-# Shell
+# Shell Project 1: Group 12
 
-[Description]
+## Project Overview
+
+This shell implementation is designed to replicate core functionalities found in a generic bash shell by directly interfacing with the operating system's process control and I/O management mechanisms.
+
+### Core Implemented Features:
+
+**Process Management**: Creates and manages child processes for command execution using `fork()` and `execv()` system calls.
+
+**Command Execution**: Searches the `$PATH` environment variable to locate and run external commands.
+
+**I/O Redirection**: Redirects standard input (`<`) and standard output (`>`) for commands to and from files.
+
+**Piping**: Chains commands by connecting the standard output of one process to the standard input of another, supporting up to two pipes, e.g., `cmd1 | cmd2 | cmd3`.
+
+**Background Processing**: Allows commands to run as background jobs (`&`) and provides basic job control and status notifications.
+
+**Variable and Tilde Expansion**: Expands environment variables (e.g., $USER) and the tilde character (`~`) to their respective values.
+
+**Built-in Commands**: Implements essential internal commands (`cd`, `exit`, `jobs`) that are handled directly by the shell without creating new processes.
 
 ## Group Members
 - **Gabe Rigdon**: gcr22@fsu.edu
@@ -10,23 +28,23 @@
 
 ### Part 1: Prompt
 - **Responsibilities**: [Description]
-- **Assigned to**:
+- **Assigned to**: Gabe Rigdon
 
 ### Part 2: Environment Variables
 - **Responsibilities**: [Description]
-- **Assigned to**:
+- **Assigned to**: Gabe Rigdon
 
 ### Part 3: Tilde Expansion
 - **Responsibilities**: [Description]
-- **Assigned to**:
+- **Assigned to**: Gabe Rigdon
 
 ### Part 4: $PATH Search
 - **Responsibilities**: [Description]
-- **Assigned to**: 
+- **Assigned to**: Gabe Rigdon
 
 ### Part 5: External Command Execution
 - **Responsibilities**: [Description]
-- **Assigned to**: 
+- **Assigned to**: Gabe Rigdon
 
 ### Part 6: I/O Redirection
 - **Responsibilities**: [Description]
@@ -42,15 +60,11 @@
 
 ### Part 9: Internal Command Execution
 - **Responsibilities**: [Description]
-- **Assigned to**:
-
-### Part 10: External Timeout Executable
-- **Responsibilities**: [Description]
-- **Assigned to**:
+- **Assigned to**: Gabe Rigdon
 
 ### Extra Credit
 - **Responsibilities**: [Description]
-- **Assigned to**:
+- **Assigned to**: Luke Stanton & Gabe Rigdon
 
 ## File Listing
 ```
@@ -58,43 +72,50 @@ os_group_12/
 │
 ├── src/
 │   ├── helper.c
+|   ├── io_redirection.c
+|   ├── jobs.c
 │   ├── lexer.c
 │   ├── main.c
-│   ├── shell.c
-│   └── io_redirection.c
+│   └── shell.c
+│   
 │
 ├── include/
 │   ├── helper.h
-│   ├── lexer.h
-│   ├── shell.h
-│   └── io_redirection.h
+│   ├── io_redirection.h
+│   ├── jobs.h
+|   ├── lexer.h 
+│   └── shell.h
 │
-├── obj/
+├── obj/        #.o files
 │
-├── bin/
+├── bin/        # "shell" executable
 │
-├── README.md
+├── .gitignore
 ├── Makefile
-└── .gitignore
+└── README.md
 
 ```
 ## How to Compile & Execute
 
 ### Requirements
-- **Compiler**: e.g., `gcc` for C/C++, `rustc` for Rust.
-- **Dependencies**: List any libraries or frameworks necessary (rust only).
+- **Compiler**: `gcc`
 
 ### Compilation
-For a C/C++ example:
 ```bash
 make
 ```
-This will build the executable in ...
+This will build an executable in `/bin` called `shell`
 ### Execution
 ```bash
 make run
 ```
-This will run the program ...
+This will run the the `shell` executable. 
+
+### Clean Environment
+```bash
+make clean
+```
+This will delete `shell` and all `.o` files. 
 
 ## Development Log
 Each member records their contributions here.
@@ -103,6 +124,7 @@ Each member records their contributions here.
 
 | Date       | Work Completed / Notes |
 |------------|------------------------|
+| 2025-09-25 | Completed part 9       |
 | 2025-09-14 | Completed part 5       |
 | 2025-09-14 | Completed part 4       |
 | 2025-09-12 | Completed part 3       |
@@ -119,7 +141,7 @@ Each member records their contributions here.
 | 2025-09-24 | Completed Part 8       |
 
 
-### [Member 3]
+### Bruno Page
 
 | Date       | Work Completed / Notes |
 |------------|------------------------|
@@ -129,12 +151,13 @@ Each member records their contributions here.
 
 
 ## Meetings
-Document in-person meetings, their purpose, and what was discussed.
 
 | Date       | Attendees            | Topics Discussed | Outcomes / Decisions |
 |------------|----------------------|------------------|-----------------------|
+| 2025-09-24 | Luke Stanton, Gabe Rigdon          | Progress review after completing part 8. of the project   | Decided to work on the extra credit after part 9.  |
 | YYYY-MM-DD | [Names]              | [Agenda items]   | [Actions/Next steps]  |
-| YYYY-MM-DD | [Names]              | [Agenda items]   | [Actions/Next steps]  |
+
+
 
 
 
@@ -144,9 +167,9 @@ Document in-person meetings, their purpose, and what was discussed.
 - **Bug 3**: This is bug 3.
 
 ## Extra Credit
-- **Extra Credit 1**: [Extra Credit Option]
-- **Extra Credit 2**: [Extra Credit Option]
-- **Extra Credit 3**: [Extra Credit Option]
+- **Extra Credit 1**: In Progress ~ Description of item goes here
+- **Extra Credit 2**: In Progress ~ Description of item goes here
+- **Extra Credit 3**: In Progress ~ Description of item goes here
 
 ## Considerations
 [Description]
