@@ -140,107 +140,6 @@ static int split_by_pipes(const tokenlist * tokens, tokenlist * parts[3]) {
     return part_index + 1;
 }
 
-/*
-Replaced by execute_pipeline_bg.
-static void execute_pipeline(tokenlist * parts[], int parts_count) {
-    char * paths[3] = {NULL, NULL, NULL};
-    for (int i = 0; i < parts_count; i++) {
-        paths[i] = search_path(parts[i]->items[0]);
-        if (!paths[i]) {
-            fprintf(stderr, "command does not exist: %s\n", parts[i]->items[0]);
-            for (int k = 0; k < i; k++) free(paths[k]);
-            return;
-        }
-    }
-
-    pid_t pids[3] = {-1, -1, -1 };
-    int prev_pipefd = -1;
-    int pipefd[2] = { -1, -1};
-
-    for (int i = 0; i < parts_count; i++) {
-        if (i < parts_count - 1 && (pipe(pipefd) < 0)) {
-            perror("pipe");
-            if (prev_pipefd != -1) close(prev_pipefd);
-            for (int j = 0; j < i; j++) {
-                if (pids[j] > 0) waitpid(pids[j], NULL, 0);
-            }
-            for (int j = 0; j < parts_count; j++) {
-                free(paths[j]);
-            }
-            return;
-        }
-
-        pid_t pid = fork();
-        if (pid < 0) {
-            perror("fork");
-            if (prev_pipefd != -1) close(prev_pipefd);
-            if (i < parts_count - 1) {
-                close(pipefd[0]);
-                close(pipefd[1]);
-            }
-            for (int k = 0; k < i; k++) {
-                if (pids[k] > 0) waitpid(pids[k], NULL, 0);
-            }
-            for (int k = 0; k < parts_count; k++) free(paths[k]);
-            return;
-        }
-
-        if (pid == 0) {
-            // Child
-            if (prev_pipefd != -1) {
-                if (dup2(prev_pipefd, STDIN_FILENO) < 0) {
-                    perror("dup2 stdin");
-                    _exit(1);
-                }
-            }
-
-            if (i < parts_count - 1) {
-                if (dup2(pipefd[1], STDOUT_FILENO) < 0) {
-                    perror("dup2 stdout");
-                    _exit(1);
-                }
-            }
-
-            if (prev_pipefd != -1) close(prev_pipefd);
-            if (i < parts_count - 1) {
-                close(pipefd[0]);
-                close(pipefd[1]);
-            }
-
-            execv(paths[i], parts[i]->items);
-
-            perror("execv");
-            _exit(127);
-        } else {
-            // Parent
-            pids[i] = pid;
-
-            if (prev_pipefd != -1) {
-                close(prev_pipefd);
-                prev_pipefd = -1;
-            }
-
-            if (i < parts_count - 1) {
-                close(pipefd[1]);
-                prev_pipefd = pipefd[0];
-            }
-        }
-    }
-
-    if (prev_pipefd != -1) close(prev_pipefd);
-
-    for (int i = 0; i < parts_count; i++) {
-        int status;
-        waitpid(pids[i], &status, 0);
-        if (!WIFEXITED(status)) {
-            perror("pipeline child terminated abnormally");
-        }
-    }
-
-    for (int i = 0; i < parts_count; ++i) free(paths[i]);
-}
-*/
-
 // Run pipeline in background. Do not wait if bg is 1. Wait if bg is 0.
 static void execute_pipeline_bg(tokenlist * parts[], int parts_count, int background, pid_t * out_last_pid) {
     char * paths[3] = { NULL,NULL,NULL };
@@ -384,24 +283,109 @@ static char * join_tokens(const tokenlist * tokens) {
     return buffer;
 }
 
+static char *g_command_history[3] = {NULL, NULL, NULL}; // stores (up to) last three commands
+static int g_history_count = 0;
+static int g_history_next = 0;
 
-// Updated to use the new argv_only list and detect bg
+void add_to_history(const char *cmdline) {
+    if (!cmdline || cmdline[0] == '\0') {
+        return;
+    }
+    if (g_command_history[g_history_next]) {
+        free(g_command_history[g_history_next]);
+    }
+    g_command_history[g_history_next] = str_dup(cmdline);
+    g_history_next = (g_history_next + 1) % 3;
+    if (g_history_count < 3) {
+        g_history_count++;
+    }
+}
+
+void print_history(void) {
+    if (g_history_count == 0) {
+        printf("No valid commands in history.\n");
+        return;
+    }
+
+    printf("Last %d commands:\n", g_history_count);
+    for (int i = 0; i < g_history_count; i++) {
+        int index = (g_history_next - g_history_count + i + 3) % 3;
+        printf("%s\n", g_command_history[index]);
+    }
+}
+
 void execute_command(tokenlist * tokens) {
+    // A temporary string for the full command line, used for history and jobs
+    char * full_cmd_str = join_tokens(tokens);
+    // Add to history *before* checking for built-ins, so built-ins are also in history
+    add_to_history(full_cmd_str);
+
+    if (strcmp(tokens->items[0], "exit") == 0) {
+        while (job_count > 0) {
+            printf("Waiting for %d background job(s) to finish...\n", job_count);
+            check_jobs();
+            sleep(1);
+        }
+        print_history();
+        for(int i = 0; i < 3; i++) {
+            if(g_command_history[i]) free(g_command_history[i]);
+        }
+        free(full_cmd_str);
+        exit(0);
+    }
+
+    // 2. CD
+    if (strcmp(tokens->items[0], "cd") == 0) {
+        char* path = NULL;
+        if (tokens->size == 1) { // "cd" with no arguments
+            path = getenv("HOME");
+            if (path == NULL) {
+                fprintf(stderr, "cd: HOME not set\n");
+            }
+        } else if (tokens->size == 2) { // "cd" with one argument
+            path = tokens->items[1];
+        } else { // "cd" with too many arguments
+            fprintf(stderr, "cd: too many arguments\n");
+        }
+
+        if (path && chdir(path) != 0) {
+            perror("cd"); // chdir failed, print error
+        }
+        free(full_cmd_str);
+        return; // Built-in handled, return to main loop
+    }
+
+    // 3. JOBS
+    if (strcmp(tokens->items[0], "jobs") == 0) {
+        if (job_count == 0) {
+            printf("No active background processes.\n");
+        } else {
+            for (int i = 0; i < 10; i++) {
+                if (jobs[i].active) {
+                    printf("[%d]+ %d %s\n", jobs[i].job_id, jobs[i].pid, jobs[i].cmdline);
+                }
+            }
+        }
+        free(full_cmd_str);
+        return; // Built-in handled, return to main loop
+    }
+
+    // --- EXTERNAL COMMAND LOGIC ---
+
     int is_bg = remove_last_ampersand(tokens);
-    char * cmdline_print = join_tokens(tokens);
 
     // Pipeline branch
     int pipes_count = count_pipes(tokens);
     if (pipes_count > 0) {
         if (pipes_count > 2) {
             fprintf(stderr, "error: at most two pipes supported\n");
-            free(cmdline_print);
+            free(full_cmd_str);
             return;
         }
         tokenlist * parts[3] = { NULL, NULL, NULL };
         int parts_count = split_by_pipes(tokens, parts);
         if (parts_count < 0) {
-            free(cmdline_print);
+            free(full_cmd_str);
             return;
         }
 
@@ -409,11 +393,11 @@ void execute_command(tokenlist * tokens) {
         execute_pipeline_bg(parts, parts_count, is_bg, &last_pid);
 
         if (is_bg && last_pid > 0) {
-            add_job(last_pid, cmdline_print);
+            add_job(last_pid, full_cmd_str);
         }
 
         for (int i = 0; i < parts_count; ++i) free_tokens(parts[i]);
-        free(cmdline_print);
+        free(full_cmd_str);
         return;
     }
 
@@ -421,12 +405,12 @@ void execute_command(tokenlist * tokens) {
     io_redirection_t redir;
     tokenlist * argv_only = take_redirections(tokens, &redir);
     if (!argv_only) {
-        free(cmdline_print);
+        free(full_cmd_str);
         return;
     }
     if (argv_only->size == 0) {
         free_tokens(argv_only);
-        free(cmdline_print);
+        free(full_cmd_str);
         return;
     }
 
@@ -434,7 +418,7 @@ void execute_command(tokenlist * tokens) {
     if (full_path == NULL) {
         fprintf(stderr, "command not found: %s\n", argv_only->items[0]);
         free_tokens(argv_only);
-        free(cmdline_print);
+        free(full_cmd_str);
         return;
     }
 
@@ -443,7 +427,7 @@ void execute_command(tokenlist * tokens) {
         perror("fork failed");
         free(full_path);
         free_tokens(argv_only);
-        free(cmdline_print);
+        free(full_cmd_str);
         return;
     } else if (child_pid == 0) {
         if (apply_io_redirection(&redir) < 0) _exit(1);
@@ -452,17 +436,17 @@ void execute_command(tokenlist * tokens) {
         _exit(127);
     } else {
         if (is_bg) {
-            add_job(child_pid, cmdline_print);
+            add_job(child_pid, full_cmd_str);
         } else {
             int status;
             waitpid(child_pid, &status, 0);
             if (!WIFEXITED(status)) {
                 perror("Child terminated with abnormal status WIFEXITED(STATUS)");
             }
+            free(full_cmd_str);
         }
     }
 
     free(full_path);
     free_tokens(argv_only);
-    free(cmdline_print);
 }
