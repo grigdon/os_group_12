@@ -315,10 +315,9 @@ void print_history(void) {
 }
 
 void execute_command(tokenlist * tokens) {
-    // A temporary string for the full command line, used for history and jobs
     char * full_cmd_str = join_tokens(tokens);
-    // Add to history *before* checking for built-ins, so built-ins are also in history
-    add_to_history(full_cmd_str);
+
+    // case when input == exit
 
     if (strcmp(tokens->items[0], "exit") == 0) {
         while (job_count > 0) {
@@ -334,7 +333,7 @@ void execute_command(tokenlist * tokens) {
         exit(0);
     }
 
-    // 2. CD
+    // case when input == cd
     if (strcmp(tokens->items[0], "cd") == 0) {
         char* path = NULL;
         if (tokens->size == 1) { // "cd" with no arguments
@@ -355,7 +354,7 @@ void execute_command(tokenlist * tokens) {
         return; // Built-in handled, return to main loop
     }
 
-    // 3. JOBS
+    // case when input == jobs
     if (strcmp(tokens->items[0], "jobs") == 0) {
         if (job_count == 0) {
             printf("No active background processes.\n");
@@ -369,6 +368,8 @@ void execute_command(tokenlist * tokens) {
         free(full_cmd_str);
         return; // Built-in handled, return to main loop
     }
+
+    add_to_history(full_cmd_str); // add in command after the exit
 
     // --- EXTERNAL COMMAND LOGIC ---
 
