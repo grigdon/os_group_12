@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <unistd.h>
 #include "lexer.h"
 #include "shell.h"
 #include "jobs.h"
@@ -11,10 +11,10 @@ int main() {
 
         // print prompt
         char *user_env = getenv("USER");
-        char *home_env = getenv("HOME");
         char *machine_env = getenv("MACHINE");
-        printf("%s@%s:%s> ", user_env, machine_env, home_env);
+        char *current_dir = getcwd(NULL, 0); // POSIX by default doesn't update $PWD on cd changes. It does update cwd though.
 
+        printf("%s@%s:%s> ", user_env, machine_env, current_dir);
         // parse input (lexer)
         char *input = get_input();
         if (input == NULL) {
