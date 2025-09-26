@@ -318,7 +318,6 @@ void execute_command(tokenlist * tokens) {
     char * full_cmd_str = join_tokens(tokens);
 
     // case when input == exit
-
     if (strcmp(tokens->items[0], "exit") == 0) {
         while (job_count > 0) {
             printf("Waiting for %d background job(s) to finish...\n", job_count);
@@ -343,15 +342,15 @@ void execute_command(tokenlist * tokens) {
             }
         } else if (tokens->size == 2) { // "cd" with one argument
             path = tokens->items[1];
-        } else { // "cd" with too many arguments
+        } else { // "cd" with too many arguments, e.g. "cd ./os_group_12 ./obj"
             fprintf(stderr, "cd: too many arguments\n");
         }
 
         if (path && chdir(path) != 0) {
-            perror("cd"); // chdir failed, print error
+            perror("cd");
         }
         free(full_cmd_str);
-        return; // Built-in handled, return to main loop
+        return;
     }
 
     // case when input == jobs
@@ -366,12 +365,10 @@ void execute_command(tokenlist * tokens) {
             }
         }
         free(full_cmd_str);
-        return; // Built-in handled, return to main loop
+        return;
     }
 
-    add_to_history(full_cmd_str); // add in command after the exit
-
-    // --- EXTERNAL COMMAND LOGIC ---
+    add_to_history(full_cmd_str); // add command to history AFTER running 'exit'
 
     int is_bg = remove_last_ampersand(tokens);
 
