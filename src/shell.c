@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <sys/types.h> // pid_t type
 #include <sys/wait.h> // wait()
+#include <sys/stat.h> // S_ISDIR
 #include <errno.h>
 
 char *search_path(char* command) {
@@ -315,7 +316,29 @@ void print_history(void) {
 }
 
 void execute_command(tokenlist * tokens) {
-    char * full_cmd_str = join_tokens(tokens);
+    char *full_cmd_str = join_tokens(tokens);
+
+    // check if single token is a directory
+    if (tokens->size == 1) {
+        char *potential_path = tokens->items[0];
+        struct stat stat_buf;
+
+        // if path exists
+        if (stat(potential_path, &stat_buf) == 0) {
+            // write bash output if true
+            if (S_ISDIR(stat_buf.st_mode)) {
+                fprintf(stderr, "bash: %s: Is a directory\n", potential_path);
+                free(full_cmd_str);
+                return;
+            }
+            // if exists but not dir nor exec
+            else if (access(potential_path, X_OK) != 0) {
+                fprintf(stderr, "bash: %s: Permission denied\n", potential_path);
+                free(full_cmd_str);
+                return;
+            }
+        }
+    }
 
     // case when input == exit
     if (strcmp(tokens->items[0], "exit") == 0) {
