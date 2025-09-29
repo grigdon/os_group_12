@@ -98,9 +98,16 @@ static int count_pipes(const tokenlist * tokens) {
     return count;
 }
 
+
 // Builds tokenlists for each command split by pipes
-static int split_by_pipes(const tokenlist * tokens, tokenlist * parts[3]) {
+static int split_by_pipes(const tokenlist *tokens, tokenlist ***parts_out) {
+    int capacity = 4;
     int part_index = 0;
+    tokenlist **parts = malloc(sizeof(tokenlist*) * capacity);
+    if (!parts) {
+        perror("malloc");
+        return -1;
+    }
     parts[part_index] = new_tokenlist();
 
     for (size_t i = 0; i < tokens->size; i++) {
@@ -110,17 +117,24 @@ static int split_by_pipes(const tokenlist * tokens, tokenlist * parts[3]) {
                 for (int j = 0; j <= part_index; j++) {
                     free_tokens(parts[j]);
                 }
+                free(parts);
                 return -1;
             }
 
             part_index++;
 
-            if (part_index >= 3) {
-                fprintf(stderr, "Error: Too many pipes\n");
-                for (int j = 0; j < part_index; j++) {
-                    free_tokens(parts[j]);
+            if (part_index >= capacity) {
+                capacity *= 2;
+                tokenlist **new_parts = realloc(parts, sizeof(tokenlist*) * capacity);
+                if (!new_parts) {
+                    perror("realloc");
+                    for (int j = 0; j <= part_index; j++) {
+                        free_tokens(parts[j]);
+                    }
+                    free(parts);
+                    return -1;
                 }
-                return -1;
+                parts = new_parts;
             }
 
             parts[part_index] = new_tokenlist();
@@ -135,15 +149,25 @@ static int split_by_pipes(const tokenlist * tokens, tokenlist * parts[3]) {
         for (int j = 0; j <= part_index; j++) {
             free_tokens(parts[j]);
         }
+        free(parts);
         return -1;
     }
 
+    *parts_out = parts;
     return part_index + 1;
 }
 
 // Run pipeline in background. Do not wait if bg is 1. Wait if bg is 0.
-static void execute_pipeline_bg(tokenlist * parts[], int parts_count, int background, pid_t * out_last_pid) {
-    char * paths[3] = { NULL,NULL,NULL };
+static void execute_pipeline_bg(tokenlist **parts, int parts_count, int background, pid_t *out_last_pid) {
+    char **paths = malloc(sizeof(char*) * parts_count);
+    pid_t *pids = malloc(sizeof(pid_t) * parts_count);
+    if (!paths || !pids) {
+        perror("malloc");
+        free(paths);
+        free(pids);
+        return;
+    }
+
     for (int i = 0; i < parts_count; i++) {
         paths[i] = search_path(parts[i]->items[0]);
         if (!paths[i]) {
@@ -151,13 +175,14 @@ static void execute_pipeline_bg(tokenlist * parts[], int parts_count, int backgr
             for (int k = 0; k < i; k++) {
                 free(paths[k]);
             }
+            free(paths);
+            free(pids);
             return;
         }
     }
 
-    pid_t pids[3] = {-1,-1,-1};
     int prev_pipefd = -1;
-    int pipefd[2] = {-1,-1};
+    int pipefd[2];
 
     for (int i = 0; i < parts_count; i++) {
         if (i < parts_count - 1 && pipe(pipefd) < 0) {
@@ -175,6 +200,8 @@ static void execute_pipeline_bg(tokenlist * parts[], int parts_count, int backgr
             for (int j = 0; j < parts_count; j++) {
                 free(paths[j]);
             }
+            free(paths);
+            free(pids);
             return;
         }
 
@@ -199,6 +226,8 @@ static void execute_pipeline_bg(tokenlist * parts[], int parts_count, int backgr
             for (int j = 0; j < parts_count; j++) {
                 free(paths[j]);
             }
+            free(paths);
+            free(pids);
             return;
         }
 
@@ -253,7 +282,6 @@ static void execute_pipeline_bg(tokenlist * parts[], int parts_count, int backgr
         free(paths[i]);
     }
 }
-
 
 static int remove_last_ampersand(tokenlist *tokens) {
     if (tokens->size == 0) return 0;
@@ -398,13 +426,8 @@ void execute_command(tokenlist * tokens) {
     // Pipeline branch
     int pipes_count = count_pipes(tokens);
     if (pipes_count > 0) {
-        if (pipes_count > 2) {
-            fprintf(stderr, "error: at most two pipes supported\n");
-            free(full_cmd_str);
-            return;
-        }
-        tokenlist * parts[3] = { NULL, NULL, NULL };
-        int parts_count = split_by_pipes(tokens, parts);
+        tokenlist **parts = NULL;
+        int parts_count = split_by_pipes(tokens, &parts);
         if (parts_count < 0) {
             free(full_cmd_str);
             return;
@@ -417,7 +440,10 @@ void execute_command(tokenlist * tokens) {
             add_job(last_pid, full_cmd_str);
         }
 
-        for (int i = 0; i < parts_count; ++i) free_tokens(parts[i]);
+        for (int i = 0; i < parts_count; ++i) {
+            free_tokens(parts[i]);
+        }
+        free(parts);
         free(full_cmd_str);
         return;
     }
