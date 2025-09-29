@@ -17,7 +17,7 @@ char *search_path(char* command) {
     // case 1: explicit executable, i.e, in_token="/usr/bin/ls"
     if(strchr(command, '/') != NULL) { // check for any '/' in command string
         if(access(command, X_OK) == 0) {
-            return str_dup(command); 
+            return str_dup(command);
         } else {
             return NULL; // if file does not exist or is not executable, return NULL
         }
@@ -28,7 +28,7 @@ char *search_path(char* command) {
         if (!path_env || !*path_env) return NULL;
         char * path_copy = str_dup(path_env);
 
-        char* directory = strtok(path_copy, ":"); // get first directory from PATH 
+        char* directory = strtok(path_copy, ":"); // get first directory from PATH
         char full_path[1024];
 
         while(directory != NULL) {
@@ -38,13 +38,13 @@ char *search_path(char* command) {
                 free(path_copy);
                 return str_dup(full_path);
             }
-            // go to next token        
+            // go to next token
             directory = strtok(NULL, ":");
         }
         free(path_copy);
         return NULL; // if not matches after loop, return NULL
     }
-} 
+}
 
 extern char **environ; // passes environment over
 
@@ -158,7 +158,7 @@ static int split_by_pipes(const tokenlist *tokens, tokenlist ***parts_out) {
 }
 
 // Run pipeline in background. Do not wait if bg is 1. Wait if bg is 0.
-static void execute_pipeline_bg(tokenlist **parts, int parts_count, int background, pid_t *out_last_pid) {
+static void execute_pipeline_bg(tokenlist **parts, int parts_count, int background, pid_t *out_last_pid, io_redirection_t* redirs) {
     char **paths = malloc(sizeof(char*) * parts_count);
     pid_t *pids = malloc(sizeof(pid_t) * parts_count);
     if (!paths || !pids) {
@@ -232,6 +232,15 @@ static void execute_pipeline_bg(tokenlist **parts, int parts_count, int backgrou
         }
 
         if (pid == 0) {
+            if (i == 0) { // First command
+                io_redirection_t r = { .in_path = redirs[i].in_path, .out_path = NULL };
+                if (apply_io_redirection(&r) < 0) _exit(1);
+            }
+            if (i == parts_count - 1) { // Last command
+                io_redirection_t r = { .in_path = NULL, .out_path = redirs[i].out_path };
+                if (apply_io_redirection(&r) < 0) _exit(1);
+            }
+
             if (prev_pipefd != -1) {
                 if (dup2(prev_pipefd, STDIN_FILENO) < 0) {
                     perror("dup2 stdin"); _exit(1);
@@ -300,7 +309,7 @@ static char * join_tokens(const tokenlist * tokens) {
     for (size_t i = 0; i < tokens->size; ++i) {
         total += strlen(tokens->items[i]) + 1;
     }
-    
+
     if (total == 0) return NULL;
     char * buffer = malloc(total + 1);
     if (!buffer) return NULL;
@@ -433,17 +442,60 @@ void execute_command(tokenlist * tokens) {
             return;
         }
 
+        io_redirection_t *redirs = malloc(sizeof(io_redirection_t) * parts_count);
+        tokenlist **argv_only_parts = malloc(sizeof(tokenlist*) * parts_count);
+        int error = 0;
+        int i = 0;
+        for (; i < parts_count; i++) {
+            argv_only_parts[i] = take_redirections(parts[i], &redirs[i]);
+            if (!argv_only_parts[i]) {
+                error = 1;
+                break;
+            }
+            if (parts_count > 1) { // Only check if there is a pipeline
+                if (i < parts_count - 1 && redirs[i].out_path != NULL) {
+                    fprintf(stderr, "Syntax error: output redirection is only allowed for the last command of a pipeline.\n");
+                    error = 1;
+                    break;
+                }
+                if (i > 0 && redirs[i].in_path != NULL) {
+                    fprintf(stderr, "Syntax error: input redirection is only allowed for the first command of a pipeline.\n");
+                    error = 1;
+                    break;
+                }
+            }
+        }
+
+        if (error) {
+            free(redirs);
+            for (int j = 0; j < parts_count; j++) {
+                if(j <= i && argv_only_parts[j]) {
+                     free_tokens(argv_only_parts[j]);
+                }
+                free_tokens(parts[j]);
+            }
+            free(argv_only_parts);
+            free(parts);
+            free(full_cmd_str);
+            return;
+        }
+
+
         pid_t last_pid = -1;
-        execute_pipeline_bg(parts, parts_count, is_bg, &last_pid);
+        execute_pipeline_bg(argv_only_parts, parts_count, is_bg, &last_pid, redirs);
 
         if (is_bg && last_pid > 0) {
             add_job(last_pid, full_cmd_str);
         }
 
-        for (int i = 0; i < parts_count; ++i) {
+        free(redirs);
+        for (i = 0; i < parts_count; ++i) {
             free_tokens(parts[i]);
+            free_tokens(argv_only_parts[i]);
         }
         free(parts);
+        free(argv_only_parts);
+
         free(full_cmd_str);
         return;
     }
