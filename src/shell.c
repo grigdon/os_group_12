@@ -101,34 +101,34 @@ static int count_pipes(const tokenlist * tokens) {
 
 // Builds tokenlists for each command split by pipes
 static int split_by_pipes(const tokenlist *tokens, tokenlist ***parts_out) {
-    int capacity = 4;
-    int count = 0;
+    int capacity = 3;
+    int part_index = 0;
     tokenlist **parts = malloc(sizeof(tokenlist*) * capacity);
     if (!parts) {
         perror("malloc");
         return -1;
     }
-
-    parts[count] = new_tokenlist();
+    parts[part_index] = new_tokenlist();
 
     for (size_t i = 0; i < tokens->size; i++) {
         if (strcmp(tokens->items[i], "|") == 0) {
-            if (parts[count]->size == 0) {
+            if (parts[part_index]->size == 0) {
                 fprintf(stderr, "Error: No command between pipes\n");
-                for (int j = 0; j <= count; j++) {
+                for (int j = 0; j <= part_index; j++) {
                     free_tokens(parts[j]);
                 }
                 free(parts);
                 return -1;
             }
 
-            count++;
-            if (count >= capacity) {
+            part_index++;
+
+            if (part_index >= capacity) {
                 capacity *= 2;
                 tokenlist **new_parts = realloc(parts, sizeof(tokenlist*) * capacity);
                 if (!new_parts) {
                     perror("realloc");
-                    for (int j = 0; j <= count; j++) {
+                    for (int j = 0; j <= part_index; j++) {
                         free_tokens(parts[j]);
                     }
                     free(parts);
@@ -137,16 +137,16 @@ static int split_by_pipes(const tokenlist *tokens, tokenlist ***parts_out) {
                 parts = new_parts;
             }
 
-            parts[count] = new_tokenlist();
+            parts[part_index] = new_tokenlist();
             continue;
         }
 
-        add_token(parts[count], tokens->items[i]);
+        add_token(parts[part_index], tokens->items[i]);
     }
 
-    if (parts[count]->size == 0) {
+    if (parts[part_index]->size == 0) {
         fprintf(stderr, "Error: No command after the last pipe\n");
-        for (int j = 0; j <= count; j++) {
+        for (int j = 0; j <= part_index; j++) {
             free_tokens(parts[j]);
         }
         free(parts);
@@ -154,7 +154,7 @@ static int split_by_pipes(const tokenlist *tokens, tokenlist ***parts_out) {
     }
 
     *parts_out = parts;
-    return count + 1;
+    return part_index + 1;
 }
 
 // Run pipeline in background. Do not wait if bg is 1. Wait if bg is 0.
