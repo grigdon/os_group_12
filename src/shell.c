@@ -101,7 +101,7 @@ static int count_pipes(const tokenlist * tokens) {
 
 // Builds tokenlists for each command split by pipes
 static int split_by_pipes(const tokenlist *tokens, tokenlist ***parts_out) {
-    int capacity = 3;
+    int capacity = 4;
     int part_index = 0;
     tokenlist **parts = malloc(sizeof(tokenlist*) * capacity);
     if (!parts) {
@@ -172,7 +172,9 @@ static void execute_pipeline_bg(tokenlist **parts, int parts_count, int backgrou
         paths[i] = search_path(parts[i]->items[0]);
         if (!paths[i]) {
             fprintf(stderr, "Command not found: %s\n", parts[i]->items[0]);
-            for (int k = 0; k < i; k++) free(paths[k]);
+            for (int k = 0; k < i; k++) {
+                free(paths[k]);
+            }
             free(paths);
             free(pids);
             return;
@@ -264,7 +266,7 @@ static void execute_pipeline_bg(tokenlist **parts, int parts_count, int backgrou
         close(prev_pipefd);
     }
 
-    if (out_last_pid) *out_last_pid = pids[parts_count - 1];
+    if (out_last_pid) * out_last_pid = pids[parts_count - 1];
 
     if (!background) {
         for (int i = 0; i < parts_count; i++) {
