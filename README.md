@@ -171,10 +171,7 @@ Each member records their contributions here.
 |------------|----------------------------------------|-------------------------------------------------------|----------------------------------------------------------------|
 | 2025-09-24 | Luke Stanton, Gabe Rigdon              | Progress review after completing part 8               | Decided to work on extra credit after completing part 9        |
 
-## Bugs & Resolutions
-- **Memory Leak in main.c**: The `current_dir` pointer from `getcwd()` was not being freed, causing memory leaks on each prompt display. **Fixed** by adding `free(current_dir)` after the prompt is printed.
-- **Command History Not Showing on Exit**: Initially, command history was added before checking for the `exit` command, causing `exit` itself to appear in history. **Fixed** by moving `add_to_history()` call after built-in command checks.
-- **Background Job Tracking**: Job completion messages were not displaying correctly when multiple background jobs finished simultaneously. **Fixed** by using `WNOHANG` in `waitpid()` loop in `check_jobs()`.
+## Bugs
 
 ## Extra Credit
 
