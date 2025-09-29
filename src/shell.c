@@ -185,30 +185,64 @@ static void execute_pipeline_bg(tokenlist **parts, int parts_count, int backgrou
     for (int i = 0; i < parts_count; i++) {
         if (i < parts_count - 1 && pipe(pipefd) < 0) {
             perror("pipe");
-            for (int i = 0; i < parts_count; i++) free(paths[i]);
+            if (prev_pipefd != -1) {
+                close(prev_pipefd);
+            }
+
+            for (int j = 0; j < i; j++) {
+                if (pids[j] > 0) {
+                    waitpid(pids[j], NULL, 0);
+                }
+            }
+
+            for (int j = 0; j < parts_count; j++) {
+                free(paths[j]);
+            }
             free(paths);
             free(pids);
+            return;
         }
 
         pid_t pid = fork();
         if (pid < 0) {
             perror("fork");
-            for (int i = 0; i < parts_count; i++) free(paths[i]);
-            free(paths);
-            free(pids);
-        }
-
-        if (pid == 0) {
             if (prev_pipefd != -1) {
-                dup2(prev_pipefd, STDIN_FILENO);
                 close(prev_pipefd);
             }
 
             if (i < parts_count - 1) {
-                dup2(pipefd[1], STDOUT_FILENO);
                 close(pipefd[0]);
                 close(pipefd[1]);
             }
+
+            for (int j = 0; j < i; j++) {
+                if (pids[j] > 0) {
+                    waitpid(pids[j], NULL, 0);
+                }
+            }
+
+            for (int j = 0; j < parts_count; j++) {
+                free(paths[j]);
+            }
+            free(paths);
+            free(pids);
+            return;
+        }
+
+        if (pid == 0) {
+            if (prev_pipefd != -1) {
+                if (dup2(prev_pipefd, STDIN_FILENO) < 0) {
+                    perror("dup2 stdin"); _exit(1);
+                }
+            }
+            if (i < parts_count - 1) {
+                if (dup2(pipefd[1], STDOUT_FILENO) < 0) {
+                    perror("dup2 stdout"); _exit(1);
+                }
+            }
+
+            if (prev_pipefd != -1) close(prev_pipefd);
+            if (i < parts_count - 1) { close(pipefd[0]); close(pipefd[1]); }
 
             execv(paths[i], parts[i]->items);
             perror("execv");
@@ -216,8 +250,9 @@ static void execute_pipeline_bg(tokenlist **parts, int parts_count, int backgrou
         } else {
             pids[i] = pid;
 
-            if (prev_pipefd != -1)
-                close(prev_pipefd);
+            if (prev_pipefd != -1) {
+                close(prev_pipefd); prev_pipefd = -1;
+            }
             if (i < parts_count - 1) {
                 close(pipefd[1]);
                 prev_pipefd = pipefd[0];
@@ -225,7 +260,9 @@ static void execute_pipeline_bg(tokenlist **parts, int parts_count, int backgrou
         }
     }
 
-    if (prev_pipefd != -1) close(prev_pipefd);
+    if (prev_pipefd != -1) {
+        close(prev_pipefd);
+    }
 
     if (out_last_pid) *out_last_pid = pids[parts_count - 1];
 
@@ -233,10 +270,16 @@ static void execute_pipeline_bg(tokenlist **parts, int parts_count, int backgrou
         for (int i = 0; i < parts_count; i++) {
             int status;
             waitpid(pids[i], &status, 0);
+            if (!WIFEXITED(status)) {
+                perror("Pipeline child stopped");
+            }
         }
     }
-}
 
+    for (int i = 0; i < parts_count; i++) {
+        free(paths[i]);
+    }
+}
 
 static int remove_last_ampersand(tokenlist *tokens) {
     if (tokens->size == 0) return 0;
