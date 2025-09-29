@@ -98,124 +98,117 @@ static int count_pipes(const tokenlist * tokens) {
     return count;
 }
 
+
 // Builds tokenlists for each command split by pipes
-static int split_by_pipes(const tokenlist * tokens, tokenlist * parts[3]) {
-    int part_index = 0;
-    parts[part_index] = new_tokenlist();
-
-    for (size_t i = 0; i < tokens->size; i++) {
-        if (strcmp(tokens->items[i], "|") == 0) {
-            if (parts[part_index]->size == 0) {
-                fprintf(stderr, "Error: No command between pipes\n");
-                for (int j = 0; j <= part_index; j++) {
-                    free_tokens(parts[j]);
-                }
-                return -1;
-            }
-
-            part_index++;
-
-            if (part_index >= 3) {
-                fprintf(stderr, "Error: Too many pipes\n");
-                for (int j = 0; j < part_index; j++) {
-                    free_tokens(parts[j]);
-                }
-                return -1;
-            }
-
-            parts[part_index] = new_tokenlist();
-            continue;
-        }
-
-        add_token(parts[part_index], tokens->items[i]);
-    }
-
-    if (parts[part_index]->size == 0) {
-        fprintf(stderr, "Error: No command after the last pipe\n");
-        for (int j = 0; j <= part_index; j++) {
-            free_tokens(parts[j]);
-        }
+static int split_by_pipes(const tokenlist *tokens, tokenlist ***parts_out) {
+    int capacity = 4;
+    int count = 0;
+    tokenlist **parts = malloc(sizeof(tokenlist*) * capacity);
+    if (!parts) {
+        perror("malloc");
         return -1;
     }
 
-    return part_index + 1;
+    parts[count] = new_tokenlist();
+
+    for (size_t i = 0; i < tokens->size; i++) {
+        if (strcmp(tokens->items[i], "|") == 0) {
+            if (parts[count]->size == 0) {
+                fprintf(stderr, "Error: No command between pipes\n");
+                for (int j = 0; j <= count; j++) {
+                    free_tokens(parts[j]);
+                }
+                free(parts);
+                return -1;
+            }
+
+            count++;
+            if (count >= capacity) {
+                capacity *= 2;
+                tokenlist **new_parts = realloc(parts, sizeof(tokenlist*) * capacity);
+                if (!new_parts) {
+                    perror("realloc");
+                    for (int j = 0; j <= count; j++) {
+                        free_tokens(parts[j]);
+                    }
+                    free(parts);
+                    return -1;
+                }
+                parts = new_parts;
+            }
+
+            parts[count] = new_tokenlist();
+            continue;
+        }
+
+        add_token(parts[count], tokens->items[i]);
+    }
+
+    if (parts[count]->size == 0) {
+        fprintf(stderr, "Error: No command after the last pipe\n");
+        for (int j = 0; j <= count; j++) {
+            free_tokens(parts[j]);
+        }
+        free(parts);
+        return -1;
+    }
+
+    *parts_out = parts;
+    return count + 1;
 }
 
 // Run pipeline in background. Do not wait if bg is 1. Wait if bg is 0.
-static void execute_pipeline_bg(tokenlist * parts[], int parts_count, int background, pid_t * out_last_pid) {
-    char * paths[3] = { NULL,NULL,NULL };
+static void execute_pipeline_bg(tokenlist **parts, int parts_count, int background, pid_t *out_last_pid) {
+    char **paths = malloc(sizeof(char*) * parts_count);
+    pid_t *pids = malloc(sizeof(pid_t) * parts_count);
+    if (!paths || !pids) {
+        perror("malloc");
+        free(paths);
+        free(pids);
+        return;
+    }
+
     for (int i = 0; i < parts_count; i++) {
         paths[i] = search_path(parts[i]->items[0]);
         if (!paths[i]) {
             fprintf(stderr, "Command not found: %s\n", parts[i]->items[0]);
-            for (int k = 0; k < i; k++) {
-                free(paths[k]);
-            }
+            for (int k = 0; k < i; k++) free(paths[k]);
+            free(paths);
+            free(pids);
             return;
         }
     }
 
-    pid_t pids[3] = {-1,-1,-1};
     int prev_pipefd = -1;
-    int pipefd[2] = {-1,-1};
+    int pipefd[2];
 
     for (int i = 0; i < parts_count; i++) {
         if (i < parts_count - 1 && pipe(pipefd) < 0) {
             perror("pipe");
-            if (prev_pipefd != -1) {
-                close(prev_pipefd);
-            }
-
-            for (int j = 0; j < i; j++) {
-                if (pids[j] > 0) {
-                    waitpid(pids[j], NULL, 0);
-                }
-            }
-
-            for (int j = 0; j < parts_count; j++) {
-                free(paths[j]);
-            }
-            return;
+            for (int i = 0; i < parts_count; i++) free(paths[i]);
+            free(paths);
+            free(pids);
         }
 
         pid_t pid = fork();
         if (pid < 0) {
             perror("fork");
-            if (prev_pipefd != -1) {
-                close(prev_pipefd);
-            }
-
-            if (i < parts_count - 1) {
-                close(pipefd[0]);
-                close(pipefd[1]);
-            }
-
-            for (int j = 0; j < i; j++) {
-                if (pids[j] > 0) {
-                    waitpid(pids[j], NULL, 0);
-                }
-            }
-
-            for (int j = 0; j < parts_count; j++) {
-                free(paths[j]);
-            }
-            return;
+            for (int i = 0; i < parts_count; i++) free(paths[i]);
+            free(paths);
+            free(pids);
         }
 
         if (pid == 0) {
             if (prev_pipefd != -1) {
-                if (dup2(prev_pipefd, STDIN_FILENO) < 0) {
-                    perror("dup2 stdin"); _exit(1);
-                }
-            }
-            if (i < parts_count - 1) {
-                if (dup2(pipefd[1], STDOUT_FILENO) < 0) {
-                    perror("dup2 stdout"); _exit(1);
-                }
+                dup2(prev_pipefd, STDIN_FILENO);
+                close(prev_pipefd);
             }
 
-            if (prev_pipefd != -1) close(prev_pipefd);
-            if (i < parts_count - 1) { close(pipefd[0]); close(pipefd[1]); }
+            if (i < parts_count - 1) {
+                dup2(pipefd[1], STDOUT_FILENO);
+                close(pipefd[0]);
+                close(pipefd[1]);
+            }
 
             execv(paths[i], parts[i]->items);
             perror("execv");
@@ -223,9 +216,8 @@ static void execute_pipeline_bg(tokenlist * parts[], int parts_count, int backgr
         } else {
             pids[i] = pid;
 
-            if (prev_pipefd != -1) {
-                close(prev_pipefd); prev_pipefd = -1;
-            }
+            if (prev_pipefd != -1)
+                close(prev_pipefd);
             if (i < parts_count - 1) {
                 close(pipefd[1]);
                 prev_pipefd = pipefd[0];
@@ -233,24 +225,15 @@ static void execute_pipeline_bg(tokenlist * parts[], int parts_count, int backgr
         }
     }
 
-    if (prev_pipefd != -1) {
-        close(prev_pipefd);
-    }
+    if (prev_pipefd != -1) close(prev_pipefd);
 
-    if (out_last_pid) * out_last_pid = pids[parts_count - 1];
+    if (out_last_pid) *out_last_pid = pids[parts_count - 1];
 
     if (!background) {
         for (int i = 0; i < parts_count; i++) {
             int status;
             waitpid(pids[i], &status, 0);
-            if (!WIFEXITED(status)) {
-                perror("Pipeline child stopped");
-            }
         }
-    }
-
-    for (int i = 0; i < parts_count; i++) {
-        free(paths[i]);
     }
 }
 
@@ -398,13 +381,8 @@ void execute_command(tokenlist * tokens) {
     // Pipeline branch
     int pipes_count = count_pipes(tokens);
     if (pipes_count > 0) {
-        if (pipes_count > 2) {
-            fprintf(stderr, "error: at most two pipes supported\n");
-            free(full_cmd_str);
-            return;
-        }
-        tokenlist * parts[3] = { NULL, NULL, NULL };
-        int parts_count = split_by_pipes(tokens, parts);
+        tokenlist **parts = NULL;
+        int parts_count = split_by_pipes(tokens, &parts);
         if (parts_count < 0) {
             free(full_cmd_str);
             return;
@@ -417,7 +395,10 @@ void execute_command(tokenlist * tokens) {
             add_job(last_pid, full_cmd_str);
         }
 
-        for (int i = 0; i < parts_count; ++i) free_tokens(parts[i]);
+        for (int i = 0; i < parts_count; ++i) {
+            free_tokens(parts[i]);
+        }
+        free(parts);
         free(full_cmd_str);
         return;
     }
