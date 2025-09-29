@@ -15,6 +15,7 @@ int main() {
         char *current_dir = getcwd(NULL, 0); // POSIX by default doesn't update $PWD on cd changes. It does update cwd though.
 
         printf("%s@%s:%s> ", user_env, machine_env, current_dir);
+        free(current_dir);
         // parse input (lexer)
         char *input = get_input();
         if (input == NULL) {
