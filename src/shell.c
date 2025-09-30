@@ -57,7 +57,7 @@ static tokenlist * take_redirections(const tokenlist * tokens, io_redirection_t 
     for (size_t i = 0; i < tokens->size; i++) {
         char * t = tokens->items[i];
 
-        // <
+        //
         if (strcmp(t, "<") == 0) {
             if (i + 1 >= tokens->size) {
                 fprintf(stderr, "Error: No input file after '<'\n");
@@ -290,6 +290,8 @@ static void execute_pipeline_bg(tokenlist **parts, int parts_count, int backgrou
     for (int i = 0; i < parts_count; i++) {
         free(paths[i]);
     }
+    free(paths);
+    free(pids);
 }
 
 static int remove_last_ampersand(tokenlist *tokens) {
@@ -542,8 +544,8 @@ void execute_command(tokenlist * tokens) {
             if (!WIFEXITED(status)) {
                 perror("Child terminated with abnormal status WIFEXITED(STATUS)");
             }
-            free(full_cmd_str);
         }
+        free(full_cmd_str);
     }
 
     free(full_path);

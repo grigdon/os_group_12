@@ -7,7 +7,7 @@ char *str_dup(const char *s) {
         return NULL;
     }
     
-    size_t size = strlen(s) + 1;
+    const size_t size = strlen(s) + 1;
     char *p = malloc(size);
 
     if(p != NULL) {
