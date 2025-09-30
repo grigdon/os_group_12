@@ -173,6 +173,15 @@ Each member records their contributions here.
 
 ## Bugs
 
+### Bug #1:
+
+`rigdon@linprog1.cs.fsu.edu:/home/majors/rigdon> echo "output test" > output1.txt`
+`rigdon@linprog1.cs.fsu.edu:/home/majors/rigdon> cat output1.txt`
+`"output test"`
+
+In a real bash shell, this would just output `output test`
+
+
 ## Extra Credit
 
 ### 1. Unlimited Piping [2 points] - **COMPLETED**
