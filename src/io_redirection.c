@@ -25,19 +25,19 @@ int apply_io_redirection(const io_redirection_t * r) {
             return -1;
         }
 
-        int in_file_descripter = open(r->in_path, O_RDONLY);
-        if (in_file_descripter < 0) {
+        int in_file_descriptor = open(r->in_path, O_RDONLY);
+        if (in_file_descriptor < 0) {
             fprintf(stderr, "Error: Couldn't open input file '%s': %s\n", r->in_path, strerror(errno));
             return -1;
         }
 
-        if (dup2(in_file_descripter, STDIN_FILENO) < 0) {
+        if (dup2(in_file_descriptor, STDIN_FILENO) < 0) {
             fprintf(stderr, "Error: Couldn't redirect stdin to '%s': %s\n", r->in_path, strerror(errno));
-            close(in_file_descripter);
+            close(in_file_descriptor);
             return -1;
         }
 
-        close(in_file_descripter);
+        close(in_file_descriptor);
     }
 
     if (r->out_path) {
